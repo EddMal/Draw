@@ -1,4 +1,6 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+﻿import Stroke from './strokes.js'; // Adjust the path as needed
+
+document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM fully loaded and parsed");
 
     const canvasObserver = new MutationObserver((mutations) => {
@@ -33,11 +35,10 @@
         let lastX = 0;
         let lastY = 0;
         const recentPoints = [];
+        const strokes = [];
         const history = [];
         let historyIndex = -1;
 
-        // Store strokes and background properties
-        const strokes = [];
         let bgColor = '#ffffff';
         let bgTransparency = 1;
 
@@ -65,16 +66,7 @@
         }
 
         function drawStrokes() {
-            for (const stroke of strokes) {
-                ctx.strokeStyle = stroke.color;
-                ctx.lineWidth = stroke.width;
-                ctx.lineJoin = 'round';
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(stroke.startX, stroke.startY);
-                ctx.lineTo(stroke.endX, stroke.endY);
-                ctx.stroke();
-            }
+            strokes.forEach(stroke => stroke.draw(ctx));
         }
 
         function getCoordinates(e) {
@@ -105,17 +97,11 @@
             const strokeColor = `rgba(${parseInt(document.getElementById('colorPicker').value.slice(1, 3), 16)}, ${parseInt(document.getElementById('colorPicker').value.slice(3, 5), 16)}, ${parseInt(document.getElementById('colorPicker').value.slice(5, 7), 16)}, ${document.getElementById('strokeTransparency').value / 100})`;
             const strokeWidth = parseInt(document.getElementById('brushSize').value, 10);
 
-            strokes.push({ startX: lastX, startY: lastY, endX: avgX, endY: avgY, color: strokeColor, width: strokeWidth });
+            const stroke = new Stroke(lastX, lastY, avgX, avgY, strokeColor, strokeWidth);
+            strokes.push(stroke);
 
             // Draw the stroke
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = strokeWidth;
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(avgX, avgY);
-            ctx.stroke();
+            stroke.draw(ctx);
 
             [lastX, lastY] = [avgX, avgY];
         }
