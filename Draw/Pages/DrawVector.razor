@@ -1,0 +1,193 @@
+﻿@page "/pages/drawvector"
+<!-- second best, pretty clean lines but some glitch in start/end-->
+<!--Vanilla JS v2.7 smoother?+brush size, touch support,save as image.png,undo/redo,line smoothing, save color and size, save image,
+load image, jitter reduze stabilization, higer Resolution, smoothing, vector: -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smooth Vector Painter</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            touch-action: none; /* Prevents scrolling when touching the canvas */
+        }
+    </style>
+</head>
+<body>
+    <input type="color" id="colorPicker" value="#000000">
+    <select id="brushSize">
+        <option value="1">Brush Size: 1px</option>
+        <option value="2">Brush Size: 2px</option>
+        <option value="3">Brush Size: 3px</option>
+        <option value="5">Brush Size: 5px</option>
+        <option value="10">Brush Size: 10px</option>
+    </select>
+    <button id="clearButton">Clear Canvas</button>
+    <button id="undoButton">Undo</button>
+    <button id="redoButton">Redo</button>
+    <button id="saveButton">Save Image</button>
+    <input type="color" id="bgColorPicker" value="#ffffff" title="Background Color">
+    <label>
+        <input type="checkbox" id="transparentCheckbox"> Transparent Background
+    </label>
+    <input type="file" id="fileInput" accept="image/*">
+    <canvas id="drawingCanvas" width="1000" height="1000"></canvas>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const displayWidth = 500;
+        const displayHeight = 500;
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        const lines = []; // Store lines as vector data
+        const history = []; // Store history for undo functionality
+        const redoStack = []; // Store history for redo functionality
+
+        function getCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            return [x * (canvas.width / displayWidth), y * (canvas.height / displayHeight)];
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = getCoordinates(e);
+            lines.push({ color: ctx.strokeStyle, size: ctx.lineWidth, points: [{ x: lastX, y: lastY }] });
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const [x, y] = getCoordinates(e);
+            const currentLine = lines[lines.length - 1];
+            currentLine.points.push({ x, y });
+
+            // Clear and redraw all lines
+            redrawCanvas();
+            lastX = x;
+            lastY = y;
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            ctx.closePath();
+            history.push(JSON.parse(JSON.stringify(lines))); // Save current state for undo
+            redoStack.length = 0; // Clear redo stack after new action
+        }
+
+        function undo() {
+            if (history.length > 0) {
+                redoStack.push(history.pop()); // Move current state to redo stack
+                lines.length = 0; // Clear current lines
+                if (history.length > 0) {
+                    lines.push(...history[history.length - 1]); // Restore last state
+                }
+                redrawCanvas();
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                const lineToRedo = redoStack.pop();
+                lines.push(...lineToRedo); // Restore the state
+                redrawCanvas();
+                history.push(JSON.parse(JSON.stringify(lines))); // Save state for undo
+            }
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!document.getElementById('transparentCheckbox').checked) {
+                ctx.fillStyle = document.getElementById('bgColorPicker').value;
+                ctx.fillRect(0, 0, canvas.width, canvas.height); // Fill background
+            }
+            lines.forEach(line => {
+                ctx.strokeStyle = line.color;
+                ctx.lineWidth = line.size;
+                ctx.beginPath();
+
+                const points = line.points;
+                ctx.moveTo(points[0].x, points[0].y);
+
+                for (let i = 1; i < points.length - 1; i++) {
+                    const midX = (points[i].x + points[i + 1].x) / 2;
+                    const midY = (points[i].y + points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+                }
+
+                ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+                ctx.stroke();
+            });
+        }
+
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            ctx.strokeStyle = document.getElementById('colorPicker').value;
+            ctx.lineWidth = parseInt(document.getElementById('brushSize').value);
+            startDrawing(e);
+        });
+
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            ctx.strokeStyle = document.getElementById('colorPicker').value;
+            ctx.lineWidth = parseInt(document.getElementById('brushSize').value);
+            startDrawing(e);
+        });
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchcancel', stopDrawing);
+
+        document.getElementById('clearButton').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            lines.length = 0; // Clear stored lines
+            history.length = 0; // Clear history
+            redoStack.length = 0; // Clear redo stack
+            redrawCanvas(); // Redraw to reflect background
+        });
+
+        document.getElementById('undoButton').addEventListener('click', undo);
+        document.getElementById('redoButton').addEventListener('click', redo);
+
+        document.getElementById('saveButton').addEventListener('click', () => {
+            const name = prompt("Enter image name:", "drawing.png");
+            if (name) {
+                const link = document.createElement('a');
+                link.download = name.endsWith('.png') ? name : name + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+</body>
+</html>
